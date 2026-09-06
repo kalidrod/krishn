@@ -2,195 +2,226 @@
 
 set -e
 
-REPO_DIR="$HOME/.krishn-repo"
-BIN_DIR="$PREFIX/bin"
-
-DIGAI_URL="https://github.com/Krishn-145/DIGAI.git"
-VENOM_URL="https://github.com/Krishn-145/VENOM.git"
-
-GPG_KEY_FILE="$REPO_DIR/keys/krishn-repo.asc"
-EXPECTED_FINGERPRINT="AA722496E5BBCF04A50E8E3958EC97FB6D49240B"
+OWNER="KRISHN"
+APP="krishn-tools"
+BASE="$HOME/.krishn-tools"
+TOOLS="$BASE/tools"
+BIN="$PREFIX/bin"
 
 clear
 
 echo "╔══════════════════════════════════════╗"
-echo "║          K R I S H N  R E P O        ║"
-echo "║            TERMUX INSTALLER          ║"
+echo "║          K R I S H N  T O O L S     ║"
+echo "║            INSTALLER v1.0            ║"
+echo "║              OWNER: $OWNER             ║"
 echo "╚══════════════════════════════════════╝"
 echo
 
-# Check Termux
 if [ -z "$PREFIX" ]; then
-    echo "[✗] Please run this inside Termux."
+    echo "[✗] This installer is for Termux."
     exit 1
 fi
 
-echo "[✓] Termux detected"
+echo "[*] Setting up..."
 
-# Update packages
-echo "[*] Updating packages..."
 pkg update -y
+pkg install -y git bash curl python dpkg
 
-# Install required packages
-echo "[*] Installing required packages..."
-pkg install -y git bash python gnupg curl
+mkdir -p "$TOOLS"
+mkdir -p "$BIN"
 
-mkdir -p "$REPO_DIR"
-mkdir -p "$REPO_DIR/keys"
-
-# Download GPG public key
-echo
-echo "[*] Downloading Krishn GPG public key..."
-
-GPG_URL="https://raw.githubusercontent.com/kalidrod/krishn/main/keys/krishn-repo.asc"
-
-if curl -fsSL "$GPG_URL" -o "$GPG_KEY_FILE"; then
-    echo "[✓] GPG public key downloaded"
-else
-    echo "[✗] Could not download GPG public key"
-    exit 1
-fi
-
-# Verify GPG fingerprint
-echo
-echo "[*] Verifying GPG fingerprint..."
-
-ACTUAL_FINGERPRINT="$(
-    gpg --with-colons --import-options show-only \
-    --import "$GPG_KEY_FILE" 2>/dev/null |
-    awk -F: '$1=="fpr" {print $10; exit}'
-)"
-
-ACTUAL_FINGERPRINT="$(echo "$ACTUAL_FINGERPRINT" | tr '[:lower:]' '[:upper:]')"
-EXPECTED_FINGERPRINT="$(echo "$EXPECTED_FINGERPRINT" | tr '[:lower:]' '[:upper:]')"
-
-if [ "$ACTUAL_FINGERPRINT" != "$EXPECTED_FINGERPRINT" ]; then
-    echo "[✗] GPG fingerprint verification failed."
-    echo
-    echo "Expected:"
-    echo "$EXPECTED_FINGERPRINT"
-    echo
-    echo "Found:"
-    echo "$ACTUAL_FINGERPRINT"
-    exit 1
-fi
-
-echo "[✓] GPG key verified"
-echo "[✓] Fingerprint: $ACTUAL_FINGERPRINT"
-
-# Import verified key
-gpg --import "$GPG_KEY_FILE" >/dev/null 2>&1 || true
-
-# Install DIGAI
-echo
-echo "──────────────────────────────────────"
-echo " Installing DIGAI"
-echo "──────────────────────────────────────"
-
-if [ -d "$REPO_DIR/DIGAI/.git" ]; then
-    cd "$REPO_DIR/DIGAI"
-    git pull --ff-only || true
-else
-    git clone "$DIGAI_URL" "$REPO_DIR/DIGAI"
-fi
-
-echo "[✓] DIGAI installed"
-
-# Install VENOM
-echo
-echo "──────────────────────────────────────"
-echo " Installing VENOM"
-echo "──────────────────────────────────────"
-
-if [ -d "$REPO_DIR/VENOM/.git" ]; then
-    cd "$REPO_DIR/VENOM"
-    git pull --ff-only || true
-else
-    git clone "$VENOM_URL" "$REPO_DIR/VENOM"
-fi
-
-echo "[✓] VENOM installed"
-
-# Permissions
-echo
-echo "[*] Preparing tools..."
-
-find "$REPO_DIR/DIGAI" -type f \
-    \( -name "*.sh" -o -name "*.py" \) \
-    -exec chmod +x {} \; 2>/dev/null || true
-
-find "$REPO_DIR/VENOM" -type f \
-    \( -name "*.sh" -o -name "*.py" \) \
-    -exec chmod +x {} \; 2>/dev/null || true
-
-echo "[✓] Permissions prepared"
-
-# DIGAI command
-cat > "$BIN_DIR/digai" <<EOF
+# Main tool manager
+cat > "$BIN/krishn-tools" <<'EOF'
 #!/data/data/com.termux/files/usr/bin/bash
 
-cd "$REPO_DIR/DIGAI"
-
-echo "Launching DIGAI..."
-echo
-
-if [ -f "./main.py" ]; then
-    python ./main.py
-elif [ -f "./digai.py" ]; then
-    python ./digai.py
-elif [ -f "./main.sh" ]; then
-    bash ./main.sh
-elif [ -f "./run.sh" ]; then
-    bash ./run.sh
-else
-    echo "[!] DIGAI launcher not detected."
-    find . -maxdepth 2 -type f | head -50
-fi
-EOF
-
-chmod +x "$BIN_DIR/digai"
-
-# VENOM command
-cat > "$BIN_DIR/venom" <<EOF
-#!/data/data/com.termux/files/usr/bin/bash
-
-cd "$REPO_DIR/VENOM"
-
-echo "Launching VENOM..."
-echo
-
-if [ -f "./main.py" ]; then
-    python ./main.py
-elif [ -f "./venom.py" ]; then
-    python ./venom.py
-elif [ -f "./main.sh" ]; then
-    bash ./main.sh
-elif [ -f "./run.sh" ]; then
-    bash ./run.sh
-else
-    echo "[!] VENOM launcher not detected."
-    find . -maxdepth 2 -type f | head -50
-fi
-EOF
-
-chmod +x "$BIN_DIR/venom"
+BASE="$HOME/.krishn-tools"
+TOOLS="$BASE/tools"
 
 echo
 echo "╔══════════════════════════════════════╗"
-echo "║       INSTALLATION COMPLETE          ║"
+echo "║            KRISHN TOOLS              ║"
 echo "╚══════════════════════════════════════╝"
+echo
+
+FOUND=0
+
+for DIR in "$TOOLS"/*; do
+    [ -d "$DIR" ] || continue
+
+    NAME="$(basename "$DIR")"
+    FOUND=1
+
+    echo "  • $NAME"
+done
+
+if [ "$FOUND" = "0" ]; then
+    echo "No tools installed."
+    echo
+    echo "Use:"
+    echo "  add.sh <name> <github-url>"
+fi
 
 echo
-echo "[✓] GPG key verified"
-echo "[✓] DIGAI installed"
-echo "[✓] VENOM installed"
+EOF
+
+chmod +x "$BIN/krishn-tools"
+
+# ADD.SH
+cat > "$BIN/add.sh" <<'EOF'
+#!/data/data/com.termux/files/usr/bin/bash
+
+set -e
+
+BASE="$HOME/.krishn-tools"
+TOOLS="$BASE/tools"
+BIN="$PREFIX/bin"
+
+if [ "$#" -lt 2 ]; then
+    echo
+    echo "╔══════════════════════════════════════╗"
+    echo "║          KRISHN TOOL ADDER           ║"
+    echo "╚══════════════════════════════════════╝"
+    echo
+    echo "Usage:"
+    echo
+    echo "  add.sh <tool-name> <github-url>"
+    echo
+    echo "Example:"
+    echo "  add.sh digai https://github.com/Krishn-145/DIGAI.git"
+    echo
+    exit 1
+fi
+
+NAME="$1"
+URL="$2"
+
+if ! [[ "$NAME" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+    echo "[✗] Invalid tool name."
+    exit 1
+fi
+
+if [[ "$URL" != https://github.com/* ]]; then
+    echo "[✗] Only GitHub repository URLs are supported."
+    exit 1
+fi
+
+DIR="$TOOLS/$NAME"
+REPO="$DIR/repo"
+
+mkdir -p "$DIR"
 
 echo
-echo "Commands:"
+echo "[*] Adding $NAME..."
+echo "[*] Repository: $URL"
+echo
+
+if [ -d "$REPO/.git" ]; then
+    echo "[*] Updating existing repository..."
+    git -C "$REPO" pull --ff-only || true
+else
+    echo "[*] Downloading repository..."
+    rm -rf "$REPO"
+    git clone "$URL" "$REPO"
+fi
+
+# Basic permissions
+find "$REPO" -type f \
+    \( -name "*.sh" -o -name "*.py" \) \
+    -exec chmod +x {} \; 2>/dev/null || true
+
+# Basic Python dependency support
+if [ -f "$REPO/requirements.txt" ]; then
+    echo "[*] Installing Python dependencies..."
+    python -m pip install -r "$REPO/requirements.txt" || {
+        echo "[!] Some Python dependencies could not be installed."
+    }
+fi
+
+# Basic Node dependency support
+if [ -f "$REPO/package.json" ]; then
+    if ! command -v node >/dev/null 2>&1; then
+        pkg install -y nodejs
+    fi
+
+    echo "[*] Installing Node dependencies..."
+    (
+        cd "$REPO"
+        npm install
+    ) || {
+        echo "[!] Node dependencies could not be installed."
+    }
+fi
+
+# Create command
+cat > "$BIN/$NAME" <<EOF
+#!/data/data/com.termux/files/usr/bin/bash
+
+REPO="$REPO"
+
+if [ ! -d "\$REPO" ]; then
+    echo "[✗] Tool repository not found."
+    exit 1
+fi
+
+cd "\$REPO"
+
+echo
+echo "======================================"
+echo " KRISHN TOOLS : $NAME"
+echo "======================================"
+echo
+
+if [ -f main.py ]; then
+    exec python main.py
+elif [ -f "$NAME.py" ]; then
+    exec python "$NAME.py"
+elif [ -f main.sh ]; then
+    exec bash main.sh
+elif [ -f run.sh ]; then
+    exec bash run.sh
+else
+    echo "[!] Automatic launcher not found."
+    echo
+    echo "Repository:"
+    echo "\$REPO"
+    echo
+    echo "Available files:"
+    find . -maxdepth 2 -type f | head -50
+fi
+EOF
+
+chmod +x "$BIN/$NAME"
+
+echo
+echo "╔══════════════════════════════════════╗"
+echo "║          TOOL ADDED SUCCESSFULLY     ║"
+echo "╚══════════════════════════════════════╝"
+echo
+echo "Tool    : $NAME"
+echo "Command : $NAME"
+echo
+echo "Run:"
+echo "  $NAME"
+echo
+EOF
+
+chmod +x "$BIN/add.sh"
+
+echo
+echo "[✓] Installation complete."
+echo
+echo "Owner : $OWNER"
+echo "Path  : $BASE"
+echo
+echo "Tool manager:"
+echo "  krishn-tools"
+echo
+echo "Add a tool:"
+echo "  add.sh <name> <github-url>"
+echo
+echo "Example:"
+echo "  add.sh digai https://github.com/Krishn-145/DIGAI.git"
+echo
+echo "Then run:"
 echo "  digai"
-echo "  venom"
 echo
-echo "Installation directory:"
-echo "  $REPO_DIR"
-echo
-echo "Krishn Repo installation finished."
